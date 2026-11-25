@@ -162,3 +162,11 @@ describe('CRUD de usuarios', () => {
     expect((await conToken(request(app).delete('/api/users/999999'))).status).toBe(404);
   });
 });
+
+describe('Webhook interno de alertas', () => {
+  test('Recibe una alerta de OpenObserve y responde 202', async () => {
+    const r = await request(app).post('/api/interno/alertas').send({ alerta: 'Errores HTTP 5xx', valor: 3 });
+    expect(r.status).toBe(202);
+    expect(r.body).toEqual({ recibida: true });
+  });
+});

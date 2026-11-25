@@ -20,6 +20,17 @@ app.get('/api/health', async (req, res) => {
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
+// Webhook interno para las alertas de OpenObserve. NGINX no lo publica (solo se alcanza dentro de la red de Docker);
+// cada alerta queda como log estructurado y viaja de regreso a OpenObserve por OTLP.
+app.post('/api/interno/alertas', (req, res) => {
+  const cuerpo = req.body || {};
+  logger.warn('alerta_openobserve', {
+    alerta: String(cuerpo.alerta || cuerpo.alert_name || 'desconocida').slice(0, 200),
+    detalle: JSON.stringify(cuerpo).slice(0, 2000),
+  });
+  res.status(202).json({ recibida: true });
+});
+
 app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint no encontrado' }));
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
