@@ -1,0 +1,182 @@
+# Pipeline CI/CD - Proyecto Parcial 2 (GPDS, UTEQ)
+#
+#  1. pruebas-backend   Jest + Supertest contra PostgreSQL (servicio de Actions)
+#  2. pruebas-frontend  Playwright (E2E) contra la app levantada en el runner
+#  3. registrar-pruebas Envía a OpenObserve el resultado (éxito/fallo, commit, rama, usuario). Corre siempre.
+#  4. desplegar         SOLO si las dos suites pasan y es push a main: SSH a EC2 y docker compose up.
+#                       Si alguna prueba falla, este job no corre: no hay conexión SSH a EC2.
+#  5. El evento del despliegue (éxito o fallo) también se registra en OpenObserve.
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   EC2_HOST, EC2_USER, EC2_SSH_KEY, O2_USER, O2_PASSWORD, ADMIN_PASSWORD
+
+name: CI-CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  O2_URL: http://${{ secrets.EC2_HOST }}:5080
+  NODE_VERSION: "22"
+
+jobs:
+  pruebas-backend:
+    name: Pruebas backend (Jest)
+    runs-on: ubuntu-latest
+    outputs:
+      total: ${{ steps.resumen.outputs.total }}
+      fallidas: ${{ steps.resumen.outputs.fallidas }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: parcial2_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/parcial2_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Jest
+        run: npx jest --runInBand --json --outputFile=jest-resultados.json
+      - name: Resumen
+        id: resumen
+        if: always()
+        run: |
+          if [ -f jest-resultados.json ]; then
+            echo "total=$(jq .numTotalTests jest-resultados.json)" >> "$GITHUB_OUTPUT"
+            echo "fallidas=$(jq .numFailedTests jest-resultados.json)" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-jest
+          path: jest-resultados.json
+
+  pruebas-frontend:
+    name: Pruebas frontend (Playwright)
+    runs-on: ubuntu-latest
+    outputs:
+      total: ${{ steps.resumen.outputs.total }}
+      fallidas: ${{ steps.resumen.outputs.fallidas }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: parcial2
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/parcial2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Playwright
+        run: npx playwright test
+      - name: Resumen
+        id: resumen
+        if: always()
+        run: |
+          F=playwright-report/resultados.json
+          if [ -f "$F" ]; then
+            echo "total=$(jq '.stats.expected + .stats.unexpected + .stats.flaky + .stats.skipped' $F)" >> "$GITHUB_OUTPUT"
+            echo "fallidas=$(jq .stats.unexpected $F)" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reporte-playwright
+          path: playwright-report/
+
+  registrar-pruebas:
+    name: Registrar resultado en OpenObserve
+    runs-on: ubuntu-latest
+    needs: [pruebas-backend, pruebas-frontend]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enviar evento de pruebas
+        env:
+          O2_USER: ${{ secrets.O2_USER }}
+          O2_PASSWORD: ${{ secrets.O2_PASSWORD }}
+          BACK_RESULT: ${{ needs.pruebas-backend.result }}
+          FRONT_RESULT: ${{ needs.pruebas-frontend.result }}
+          BACK_TOTAL: ${{ needs.pruebas-backend.outputs.total }}
+          BACK_FAILED: ${{ needs.pruebas-backend.outputs.fallidas }}
+          FRONT_TOTAL: ${{ needs.pruebas-frontend.outputs.total }}
+          FRONT_FAILED: ${{ needs.pruebas-frontend.outputs.fallidas }}
+        run: |
+          if [ "$BACK_RESULT" = "success" ] && [ "$FRONT_RESULT" = "success" ]; then
+            ./scripts/registrar-evento.sh pruebas exito "Todas las pruebas pasaron"
+          else
+            ./scripts/registrar-evento.sh pruebas fallo "Fallaron pruebas (backend: $BACK_RESULT, frontend: $FRONT_RESULT); despliegue bloqueado"
+            ./scripts/registrar-evento.sh despliegue bloqueado "No se abre la conexión SSH a EC2 porque las pruebas fallaron"
+          fi
+
+  desplegar:
+    name: Desplegar en AWS EC2
+    runs-on: ubuntu-latest
+    needs: [pruebas-backend, pruebas-frontend]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH a EC2 y docker compose up
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 25m
+          envs: REPO_URL,COMMIT,O2_USER,O2_PASSWORD,ADMIN_PASSWORD
+          script: |
+            set -e
+            DIR="$HOME/parcial2"
+            if [ ! -d "$DIR/.git" ]; then git clone "$REPO_URL" "$DIR"; fi
+            cd "$DIR" && git fetch --depth 50 origin && git reset --hard "$COMMIT"
+            bash scripts/desplegar.sh
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          COMMIT: ${{ github.sha }}
+          O2_USER: ${{ secrets.O2_USER }}
+          O2_PASSWORD: ${{ secrets.O2_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      - name: Verificar la app publicada
+        run: |
+          for i in $(seq 1 20); do
+            curl -fs "http://${{ secrets.EC2_HOST }}/api/health" && exit 0
+            sleep 5
+          done
+          exit 1
+      - name: Registrar despliegue en OpenObserve
+        if: always()
+        env:
+          O2_USER: ${{ secrets.O2_USER }}
+          O2_PASSWORD: ${{ secrets.O2_PASSWORD }}
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            ./scripts/registrar-evento.sh despliegue exito "Contenedores actualizados en EC2"
+          else
+            ./scripts/registrar-evento.sh despliegue fallo "Falló el despliegue en EC2"
+          fi

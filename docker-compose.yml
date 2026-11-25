@@ -1,0 +1,85 @@
+# Stack que corre en la instancia AWS EC2.
+#   nginx (puerto 80, proxy inverso) -> app (Express :3000) -> db (PostgreSQL)
+#   app --OTLP--> otel-collector --OTLP/HTTP--> openobserve (puerto 5080)
+#   otel-collector también lee las métricas del host (CPU, RAM, red, disco) desde /proc y /sys.
+name: parcial2
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: parcial2
+      POSTGRES_USER: parcial2
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parcial2 -d parcial2"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 256m
+
+  app:
+    build: .
+    image: parcial2-app:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+      DATABASE_URL: postgres://parcial2:${POSTGRES_PASSWORD}@db:5432/parcial2
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@uteq.edu.mx}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?falta ADMIN_PASSWORD}
+      APP_VERSION: ${APP_VERSION:-dev}
+      OTEL_SERVICE_NAME: parcial2-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      HOST_SYS_PATH: /hostsys
+    volumes:
+      - /sys:/hostsys:ro
+    mem_limit: 256m
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    mem_limit: 64m
+
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    restart: unless-stopped
+    environment:
+      ZO_ROOT_USER_EMAIL: ${O2_USER:?falta O2_USER}
+      ZO_ROOT_USER_PASSWORD: ${O2_PASSWORD:?falta O2_PASSWORD}
+      ZO_DATA_DIR: /data
+      ZO_TELEMETRY: "false"
+    ports:
+      - "5080:5080"
+    volumes:
+      - o2data:/data
+    mem_limit: 700m
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.119.0
+    restart: unless-stopped
+    depends_on: [openobserve]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      O2_AUTH: ${O2_AUTH:?falta O2_AUTH}
+    volumes:
+      - ./infra/otel/collector.yaml:/etc/otelcol/config.yaml:ro
+      - /:/hostfs:ro
+    mem_limit: 200m
+
+volumes:
+  pgdata:
+  o2data:

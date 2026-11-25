@@ -1,0 +1,28 @@
+:root { --verde: #00684a; --verde-osc: #004d36; --gris: #f3f5f4; --borde: #d5dbd8; --texto: #1d2a25; --rojo: #b42318; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--gris); color: var(--texto); }
+header.barra { background: var(--verde); color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+header.barra h1 { font-size: 18px; margin: 0; }
+header.barra button { background: transparent; color: #fff; border: 1px solid #fff; }
+main { max-width: 980px; margin: 32px auto; padding: 0 16px; }
+.tarjeta { background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 24px; }
+.acceso { max-width: 400px; margin: 64px auto; }
+h2 { margin-top: 0; }
+label { display: block; font-weight: 600; margin: 14px 0 6px; font-size: 14px; }
+input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 6px; font-size: 15px; }
+button { cursor: pointer; padding: 10px 16px; border-radius: 6px; border: 0; font-size: 15px; background: var(--verde); color: #fff; }
+button:hover { background: var(--verde-osc); }
+button.secundario { background: #fff; color: var(--verde); border: 1px solid var(--verde); }
+button.peligro { background: var(--rojo); }
+.ancho { width: 100%; margin-top: 20px; }
+.mensaje { margin-top: 14px; padding: 10px 12px; border-radius: 6px; font-size: 14px; display: none; }
+.mensaje.error { display: block; background: #fdecea; color: var(--rojo); }
+.mensaje.ok { display: block; background: #e6f4ee; color: var(--verde-osc); }
+.pie { margin-top: 18px; font-size: 14px; text-align: center; }
+table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--borde); }
+th { background: var(--gris); }
+td.acciones { white-space: nowrap; }
+td.acciones button { padding: 6px 10px; font-size: 13px; margin-right: 4px; }
+.fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
+.encabezado { display: flex; justify-content: space-between; align-items: center; }

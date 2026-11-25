@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Registro · Parcial 2</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <section class="tarjeta acceso">
+      <h2>Crear cuenta</h2>
+      <form id="form-registro" novalidate>
+        <label for="name">Nombre</label>
+        <input id="name" name="name" data-testid="registro-nombre" required>
+        <label for="email">Correo</label>
+        <input id="email" name="email" type="email" data-testid="registro-email" required>
+        <label for="password">Contraseña (mínimo 8 caracteres)</label>
+        <input id="password" name="password" type="password" data-testid="registro-password" required>
+        <label for="password2">Confirmar contraseña</label>
+        <input id="password2" name="password2" type="password" data-testid="registro-password2" required>
+        <button type="submit" class="ancho" data-testid="registro-submit">Registrarme</button>
+      </form>
+      <div id="mensaje" class="mensaje" role="alert" data-testid="registro-mensaje"></div>
+      <p class="pie">¿Ya tienes cuenta? <a href="index.html" data-testid="link-login">Inicia sesión</a></p>
+    </section>
+  </main>
+  <script src="app.js"></script>
+  <script>
+    document.getElementById('form-registro').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('mensaje');
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if (password !== document.getElementById('password2').value) return mostrar(msg, 'Las contraseñas no coinciden', 'error');
+      try {
+        const r = await api('/api/auth/register', { method: 'POST', body: { name, email, password } });
+        Sesion.guardar(r.token, r.user);
+        location.href = 'users.html';
+      } catch (err) { mostrar(msg, err.message, 'error'); }
+    });
+  </script>
+</body>
+</html>
