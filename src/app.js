@@ -20,9 +20,10 @@ app.get('/api/health', async (req, res) => {
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
-// Webhook interno para las alertas de OpenObserve. NGINX no lo publica (solo se alcanza dentro de la red de Docker);
-// cada alerta queda como log estructurado y viaja de regreso a OpenObserve por OTLP.
-app.post('/api/interno/alertas', (req, res) => {
+// Webhook que recibe las alertas de OpenObserve. OpenObserve no permite destinos en IPs privadas,
+// así que llama a la IP pública del servidor. Solo deja un log estructurado (no toca datos) y ese log
+// regresa a OpenObserve por OTLP, donde se ve junto con el resto de eventos.
+app.post('/api/alertas/webhook', (req, res) => {
   const cuerpo = req.body || {};
   logger.warn('alerta_openobserve', {
     alerta: String(cuerpo.alerta || cuerpo.alert_name || 'desconocida').slice(0, 200),
