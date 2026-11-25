@@ -48,8 +48,17 @@ chmod 600 .env
 # El contenedor del proyecto anterior ocupaba el puerto 80
 sudo docker rm -f ci-cd-pipeline-api 2>/dev/null || true
 
+echo ">> Espacio en disco antes de limpiar"; df -h / | tail -1
+# Limpia imágenes y contenedores que ya no se usan (no toca los volúmenes de datos)
+sudo docker system prune -af >/dev/null || true
+df -h / | tail -1
+
+echo ">> Descargando imágenes (de una en una para no saturar la t3.micro)"
+export COMPOSE_PARALLEL_LIMIT=1
+for i in 1 2 3; do sudo -E docker compose pull --quiet db nginx openobserve otel-collector && break; echo "reintento $i"; sleep 5; done
+
 echo ">> Construyendo y levantando contenedores"
-sudo docker compose up -d --build --remove-orphans
+sudo -E docker compose up -d --build --remove-orphans
 sudo docker image prune -f >/dev/null
 
 echo ">> Esperando a que la app responda"

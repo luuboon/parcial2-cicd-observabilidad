@@ -34,6 +34,6 @@ JSON
 )
 echo "$CUERPO"
 CODIGO=$(curl -s -o /tmp/o2-respuesta.txt -w "%{http_code}" -m 20 -u "${O2_USER}:${O2_PASSWORD}" \
-  -H "Content-Type: application/json" -X POST "${O2_URL}/api/default/cicd_pipeline/_json" -d "$CUERPO" || echo "000")
+  -H "Content-Type: application/json" -X POST "${O2_URL}/api/default/cicd_pipeline/_json" -d "$CUERPO" || true)
 echo "OpenObserve respondió HTTP $CODIGO: $(cat /tmp/o2-respuesta.txt 2>/dev/null)"
 exit 0
