@@ -5,6 +5,14 @@ set -euo pipefail
 REPO_URL="${REPO_URL:?}"; COMMIT="${COMMIT:?}"
 DIR="$HOME/parcial2"
 
+# Si el volumen EBS se amplió en AWS, extender la partición y el sistema de archivos
+PART=$(findmnt -n -o SOURCE /)
+[ "$PART" = "/dev/root" ] && PART=$(readlink -f /dev/disk/by-label/cloudimg-rootfs 2>/dev/null || lsblk -rpno NAME,MOUNTPOINT | awk '$2=="/"{print $1}')
+DISCO="/dev/$(lsblk -no PKNAME "$PART")"; NUM=$(cat "/sys/class/block/$(basename "$PART")/partition" 2>/dev/null || echo 1)
+sudo growpart "$DISCO" "$NUM" 2>/dev/null && echo ">> Partición extendida" || true
+sudo resize2fs "$PART" >/dev/null 2>&1 || sudo xfs_growfs / >/dev/null 2>&1 || true
+df -h / | tail -1
+
 # 2 GB de swap: la t3.micro solo tiene 1 GB de RAM
 if ! sudo swapon --show | grep -q /swapfile; then
   echo ">> Creando swap de 2 GB"
@@ -55,10 +63,10 @@ df -h / | tail -1
 
 echo ">> Descargando imágenes (de una en una para no saturar la t3.micro)"
 export COMPOSE_PARALLEL_LIMIT=1
-for i in 1 2 3; do sudo -E docker compose pull --quiet db nginx openobserve otel-collector && break; echo "reintento $i"; sleep 5; done
+for i in 1 2 3; do sudo docker compose pull --quiet db nginx openobserve otel-collector && break; echo "reintento $i"; sleep 5; done
 
 echo ">> Construyendo y levantando contenedores"
-sudo -E docker compose up -d --build --remove-orphans
+sudo docker compose up -d --build --remove-orphans
 sudo docker image prune -f >/dev/null
 
 echo ">> Esperando a que la app responda"
