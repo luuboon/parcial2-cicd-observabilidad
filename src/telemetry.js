@@ -24,7 +24,7 @@ if (activo) {
     metricReaders: [
       new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter(), exportIntervalMillis: 15000 }),
     ],
-    logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())],
+    logRecordProcessors: [new BatchLogRecordProcessor({ exporter: new OTLPLogExporter() })],
     instrumentations: [
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-fs': { enabled: false },

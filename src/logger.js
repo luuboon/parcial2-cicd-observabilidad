@@ -1,5 +1,5 @@
 // Logs estructurados: se imprimen en consola (JSON) y se emiten como log records de OpenTelemetry.
-const { logs, SeverityNumber } = require('@opentelemetry/api-logs');
+const { logs, SeverityNumber } = require('@opentelemetry/api');
 
 const otelLogger = logs.getLogger('parcial2-api');
 const NIVELES = {
