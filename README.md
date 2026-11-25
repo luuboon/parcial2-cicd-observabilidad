@@ -48,7 +48,12 @@ node src/server.js       # http://localhost:3000
 - **Trazas**: cada petición HTTP con sus spans de Express y de las consultas a PostgreSQL.
 - **Métricas**: `http_requests_total`, `http_errors_total`, `http_request_duration_ms` por endpoint; métricas del host
   `system_cpu_utilization`, `system_memory_utilization`, `system_network_io`, `system_filesystem_utilization`, `system_cpu_load_average_1m`.
-- **Pipeline**: stream de logs `cicd_pipeline` con cada ejecución de pruebas y cada despliegue.
+- **Pipeline**: stream de logs `cicd_pipeline` con cada ejecución de pruebas y cada despliegue, y stream `cicd_pruebas`
+  con una fila por prueba (suite, nombre, estado, duración, commit, rama y usuario).
+- **Tableros**: *Parcial 2 - Panorama general* (Resumen, Aplicación, Pipeline CI/CD) e *Infraestructura EC2*.
+- **Alertas** (cada minuto, ventana de 5 min): `pipeline_fallido`, `errores_http_5xx`, `excepcion_no_controlada`,
+  `muchos_logins_fallidos`, `cpu_alta`, `ram_alta`, `latencia_alta`. Avisan al webhook `POST /api/alertas/webhook`
+  de la app, que deja un log `alerta_openobserve` (OpenObserve no acepta destinos en IPs privadas, por eso usa la IP pública).
 - **Temperatura**: la app intenta leer `/sys/class/thermal`; las instancias virtuales de EC2 no exponen ese sensor,
   así que se registra el aviso `sensor_temperatura_no_disponible`.
 

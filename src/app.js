@@ -39,6 +39,13 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // Manejo central de errores: se registra la excepción como log de nivel error (también queda en la traza).
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON inválido' });
+  // Errores del cliente que lanza Express (cuerpo demasiado grande, codificación no soportada, ...):
+  // se responden con su propio código y no cuentan como excepción del servidor.
+  const codigo = err.status || err.statusCode;
+  if (codigo >= 400 && codigo < 500) {
+    logger.warn('peticion_rechazada', { motivo: err.type || err.message, statusCode: codigo, path: req.originalUrl });
+    return res.status(codigo).json({ error: codigo === 413 ? 'El cuerpo de la petición es demasiado grande' : 'Petición inválida' });
+  }
   logger.error('excepcion_no_controlada', { message: err.message, stack: err.stack, path: req.originalUrl, method: req.method });
   return res.status(500).json({ error: 'Error interno del servidor' });
 });

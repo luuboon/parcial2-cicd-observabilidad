@@ -2,7 +2,8 @@
 #
 #  1. pruebas-backend   Jest + Supertest contra PostgreSQL (servicio de Actions)
 #  2. pruebas-frontend  Playwright (E2E) contra la app levantada en el runner
-#  3. registrar-pruebas Envía a OpenObserve el resultado (éxito/fallo, commit, rama, usuario). Corre siempre.
+#  3. registrar-pruebas Envía a OpenObserve el resultado general (éxito/fallo, commit, rama, usuario) al stream
+#                       cicd_pipeline y el resultado de cada prueba al stream cicd_pruebas. Corre siempre.
 #  4. desplegar         SOLO si las dos suites pasan y es push a main: SSH a EC2 y docker compose up.
 #                       Si alguna prueba falla, este job no corre: no hay conexión SSH a EC2.
 #  5. El evento del despliegue (éxito o fallo) también se registra en OpenObserve.
@@ -117,6 +118,23 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@v4
+      - name: Descargar resultados de Jest
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: resultados-jest
+          path: resultados/jest
+      - name: Descargar resultados de Playwright
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: reporte-playwright
+          path: resultados/playwright
+      - name: Enviar el resultado de cada prueba
+        env:
+          O2_USER: ${{ secrets.O2_USER }}
+          O2_PASSWORD: ${{ secrets.O2_PASSWORD }}
+        run: ./scripts/registrar-pruebas-detalle.sh resultados/jest/jest-resultados.json resultados/playwright/resultados.json
       - name: Enviar evento de pruebas
         env:
           O2_USER: ${{ secrets.O2_USER }}

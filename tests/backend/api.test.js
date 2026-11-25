@@ -163,6 +163,14 @@ describe('CRUD de usuarios', () => {
   });
 });
 
+describe('Errores del cliente', () => {
+  test('Un cuerpo demasiado grande responde 413 y no 500', async () => {
+    const r = await request(app).post('/api/auth/login').set('Content-Type', 'application/json')
+      .send(JSON.stringify({ email: 'x'.repeat(200000) }));
+    expect(r.status).toBe(413);
+  });
+});
+
 describe('Webhook de alertas', () => {
   test('Recibe una alerta de OpenObserve y responde 202', async () => {
     const r = await request(app).post('/api/alertas/webhook').send({ alerta: 'Errores HTTP 5xx', valor: 3 });
